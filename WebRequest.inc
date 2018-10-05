@@ -21,6 +21,14 @@ enum EHTTPMethodInternal
 	HEAD
 }
 
+typeset WebRequest_Completed {
+	function void (WebRequest wRequest, bool bSuccess, int iStatusCode, const char[] szBodyData);
+};
+
+typeset WebRequest_Downloaded {
+	function void (WebRequest wRequest, const char[] szPath, int iBytesWritten);
+}
+
 methodmap WebRequest < Handle {
 	public WebRequest() {
 		StringMap smWebRequest = new StringMap();
@@ -89,7 +97,7 @@ methodmap WebRequest < Handle {
 		return smWebRequest.SetString("path", szPath, true);
 	}
 	
-	public bool SetCallBack(Function fCallBack) {
+	public bool SetCallBack(WebRequest_Completed fCallBack) {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		//Hack.
@@ -98,17 +106,39 @@ methodmap WebRequest < Handle {
 		return smWebRequest.SetValue("callback", iCallBack);
 	}
 	
-	public Function GetCallBack() {
+	public WebRequest_Completed GetCallBack() {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		//Hack.
 		int iCallBack;
 		
 		if (!smWebRequest.GetValue("callback", iCallBack)) {
-			return view_as<Function>(INVALID_FUNCTION);
+			return view_as<WebRequest_Completed>(INVALID_FUNCTION);
 		}
 		
-		return view_as<Function>(iCallBack);
+		return view_as<WebRequest_Completed>(iCallBack);
+	}
+	
+	public bool SetDownloadCallBack(WebRequest_Downloaded fCallBack) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		
+		//Hack.
+		int iCallBack = view_as<int>(fCallBack);
+		
+		return smWebRequest.SetValue("downloadcallback", iCallBack);
+	}
+	
+	public WebRequest_Downloaded GetDownloadCallBack() {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		
+		//Hack.
+		int iCallBack;
+		
+		if (!smWebRequest.GetValue("downloadcallback", iCallBack)) {
+			return view_as<WebRequest_Downloaded>(INVALID_FUNCTION);
+		}
+		
+		return view_as<WebRequest_Downloaded>(iCallBack);
 	}
 	
 	public bool SetContextValue(const char[] szKey, any aContextValue) {
@@ -242,6 +272,7 @@ methodmap WebRequest < Handle {
 		EHTTPMethodInternal eMethod;
 		
 		int iCallBack = INVALID_FUNCTION;
+		int iDownloadCallBack = INVALID_FUNCTION;
 		
 		if (!smWebRequest.GetString("url", szUrl, sizeof(szUrl))) {
 			LogError("You must set a WebRequest url before sending!");
@@ -255,6 +286,10 @@ methodmap WebRequest < Handle {
 		
 		if(!smWebRequest.GetValue("callback", iCallBack) || iCallBack == INVALID_FUNCTION) {
 			smWebRequest.SetValue("callback", INVALID_FUNCTION);
+		}
+		
+		if(!smWebRequest.GetValue("downloadcallback", iDownloadCallBack) || iDownloadCallBack == INVALID_FUNCTION) {
+			smWebRequest.SetValue("downloadcallback", INVALID_FUNCTION);
 		}
 		
 		smWebRequest.GetValue("context", smContext);
@@ -390,13 +425,14 @@ bool SteamTools_FallBack(WebRequest wRequest)
 
 public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailure, bool bSuccessful, EHTTPStatusCode httpStatusCode, WebRequest wRequest)
 {
-	Function fCallBack = wRequest.GetCallBack();
+	WebRequest_Completed fCallBack = wRequest.GetCallBack();
+	WebRequest_Downloaded fDownloadCallBack = wRequest.GetDownloadCallBack();
 	
 	if (!bSuccessful || bFailure) {
 		delete hSteamWorksRequest;
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -413,8 +449,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	if (!SteamWorks_GetHTTPResponseBodySize(hSteamWorksRequest, iBodySize)) {
 		delete hSteamWorksRequest;
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -429,8 +465,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	if (iBodySize < 1) {
 		delete hSteamWorksRequest;
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -447,8 +483,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	if (!SteamWorks_GetHTTPResponseBodyData(hSteamWorksRequest, szBodyData, iBodySize) || strlen(szBodyData) < 1) {
 		delete hSteamWorksRequest;
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -462,19 +498,24 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	
 	char szPath[PLATFORM_MAX_PATH];
 	
-	if (wRequest.GetPath(szPath, sizeof(szPath))) {
-		if (BuildPathRecursively(szPath)) {
-			File fFile = OpenFile(szPath, "w+");
-			
-			if (fFile != null) {
-				fFile.WriteString(szBodyData, false);
-				fFile.Close();
+	if (wRequest.GetPath(szPath, sizeof(szPath)) && BuildPathRecursively(szPath)) {
+		File fFile = OpenFile(szPath, "w+");
+		
+		if (fFile != null) {
+			if(fFile.WriteString(szBodyData, false) && fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION)) {
+				Call_StartFunction(null, fDownloadCallBack);
+				Call_PushCell(wRequest);
+				Call_PushString(szPath);
+				Call_PushCell(FileSize(szPath));
+				Call_Finish();
 			}
+			
+			fFile.Close();
 		}
 	}
 	
-	if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-		Call_StartFunction(INVALID_HANDLE, fCallBack);
+	if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+		Call_StartFunction(null, fCallBack);
 		Call_PushCell(wRequest);
 		Call_PushCell(true);
 		Call_PushCell(view_as<int>(httpStatusCode));
@@ -487,13 +528,14 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 
 public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, bool bSuccessful, HTTPStatusCode httpStatusCode, WebRequest wRequest)
 {
-	Function fCallBack = wRequest.GetCallBack();
+	WebRequest_Completed fCallBack = wRequest.GetCallBack();
+	WebRequest_Downloaded fDownloadCallBack = wRequest.GetDownloadCallBack();
 	
 	if (!bSuccessful) {
 		Steam_ReleaseHTTPRequest(hSteamToolsRequest);
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -510,8 +552,8 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	if (iBodySize < 1) {
 		Steam_ReleaseHTTPRequest(hSteamToolsRequest);
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -529,8 +571,8 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	if (strlen(szBodyData) < 1) {
 		Steam_ReleaseHTTPRequest(hSteamToolsRequest);
 		
-		if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-			Call_StartFunction(INVALID_HANDLE, fCallBack);
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
@@ -544,19 +586,24 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	
 	char szPath[PLATFORM_MAX_PATH];
 	
-	if (wRequest.GetPath(szPath, sizeof(szPath))) {
-		if (BuildPathRecursively(szPath)) {
-			File fFile = OpenFile(szPath, "w+");
-			
-			if (fFile != null) {
-				fFile.WriteString(szBodyData, false);
-				fFile.Close();
+	if (wRequest.GetPath(szPath, sizeof(szPath)) && BuildPathRecursively(szPath)) {
+		File fFile = OpenFile(szPath, "w+");
+		
+		if (fFile != null) {
+			if(fFile.WriteString(szBodyData, false) && fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION)) {
+				Call_StartFunction(null, fDownloadCallBack);
+				Call_PushCell(wRequest);
+				Call_PushString(szPath);
+				Call_PushCell(FileSize(szPath));
+				Call_Finish();
 			}
+			
+			fFile.Close();
 		}
 	}
 	
-	if (fCallBack != view_as<Function>(INVALID_FUNCTION)) {
-		Call_StartFunction(INVALID_HANDLE, fCallBack);
+	if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+		Call_StartFunction(null, fCallBack);
 		Call_PushCell(wRequest);
 		Call_PushCell(true);
 		Call_PushCell(view_as<int>(httpStatusCode));
