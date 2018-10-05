@@ -31,7 +31,7 @@ methodmap WebRequest < Handle {
 		
 		if (!g_bSteamWorks && !g_bSteamTools) {
 			delete smWebRequest;
-			ThrowNativeError(SP_ERROR_NATIVE, "SteamWorks or SteamTools is required to make a WebRequest!");
+			LogError("SteamWorks or SteamTools is required to make a WebRequest!");
 			return null;
 		}
 		
@@ -283,7 +283,6 @@ methodmap WebRequest < Handle {
 				
 				return true;
 			}
-			
 		} else if (g_bSteamTools) {
 			HTTPMethod stMethod;
 			
@@ -315,12 +314,10 @@ methodmap WebRequest < Handle {
 			if (g_bSteamWorks && !SteamWorks_SetHTTPRequestGetOrPostParameter(hSteamWorksRequest, szParamKey, szParamValue)) {
 				bParamFailure = true;
 				break;
-			} else if (g_bSteamTools) {
-				if (!Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
-					Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-					LogError("Failed to set WebRequest params!");
-					return false;
-				}
+			} else if (g_bSteamTools && !Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
+				Steam_ReleaseHTTPRequest(hSteamToolsRequest);
+				LogError("Failed to set WebRequest params!");
+				return false;
 			}
 		}
 		
@@ -368,13 +365,10 @@ methodmap WebRequest < Handle {
 				
 				return true;
 			}
-			
-		} else if (g_bSteamTools) {
-			if (!Steam_SendHTTPRequest(hSteamToolsRequest, WebRequest_SteamToolsComplete, this)) {
-				Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-				LogError("Failed to send WebRequest!");
-				return false;
-			}
+		} else if (g_bSteamTools && !Steam_SendHTTPRequest(hSteamToolsRequest, WebRequest_SteamToolsComplete, this)) {
+			Steam_ReleaseHTTPRequest(hSteamToolsRequest);
+			LogError("Failed to send WebRequest!");
+			return false;
 		}
 		
 		return true;
@@ -573,14 +567,14 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	Steam_ReleaseHTTPRequest(hSteamToolsRequest);
 }
 
-stock void WebRequest_CheckExtensions()
+void WebRequest_CheckExtensions()
 {
 	g_bExtensions = true;
 	g_bSteamTools = (GetExtensionFileStatus("steamtools.ext") == 1);
 	g_bSteamWorks = (GetExtensionFileStatus("SteamWorks.ext") == 1);
 }
 
-stock bool BuildPathRecursively(const char[] szInput)
+bool BuildPathRecursively(const char[] szInput)
 {
 	char szFile[PLATFORM_MAX_PATH];
 	
@@ -599,10 +593,6 @@ stock bool BuildPathRecursively(const char[] szInput)
 	}
 	
 	char szPath[PLATFORM_MAX_PATH]; 
-	
-	if(strcopy(szPath, sizeof(szPath), szInput) < 1) {
-		return false;
-	}
 	
 	ReplaceString(szPath, sizeof(szPath), szFile, "", false);
 	ReplaceString(szPath, sizeof(szPath), "/", "\\", false);
