@@ -10,6 +10,9 @@
 #include <steamtools>
 #include <SteamWorks>
 
+#define MAX_RESPONSE_BYTES 104857600
+#pragma dynamic MAX_RESPONSE_BYTES
+
 bool g_bExtensions = false;
 bool g_bSteamTools = false;
 bool g_bSteamWorks = false;
@@ -22,7 +25,7 @@ enum EHTTPMethodInternal
 }
 
 typeset WebRequest_Completed {
-	function void (WebRequest wRequest, bool bSuccess, int iStatusCode, const char[] szBodyData);
+	function void (WebRequest wRequest, bool bSuccess, int iStatusCode, const char[] szBodyData, int iBodySize);
 };
 
 typeset WebRequest_Downloaded {
@@ -338,33 +341,35 @@ methodmap WebRequest < Handle {
 		char szParamKey[64];
 		char szParamValue[64];
 		
-		StringMapSnapshot smParamKeys = smParams.Snapshot();
-		
-		bool bParamFailure = false;
-		
-		for (int i = 0; i < smParamKeys.Length; i++) {
-			smParamKeys.GetKey(i, szParamKey, sizeof(szParamKey));
-			smParams.GetString(szParamKey, szParamValue, sizeof(szParamValue));
+		if(smParams != null) {
+			StringMapSnapshot smParamKeys = smParams.Snapshot();
 			
-			if (g_bSteamWorks && !SteamWorks_SetHTTPRequestGetOrPostParameter(hSteamWorksRequest, szParamKey, szParamValue)) {
-				bParamFailure = true;
-				break;
-			} else if (g_bSteamTools && !Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
-				Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-				LogError("Failed to set WebRequest params!");
-				return false;
-			}
-		}
-		
-		delete smParamKeys;
-		
-		if (bParamFailure) {
-			if (!SteamTools_FallBack(this)) {
-				LogError("Failed to set WebRequest params!");
-				return false;
+			bool bParamFailure = false;
+			
+			for (int i = 0; i < smParamKeys.Length; i++) {
+				smParamKeys.GetKey(i, szParamKey, sizeof(szParamKey));
+				smParams.GetString(szParamKey, szParamValue, sizeof(szParamValue));
+				
+				if (g_bSteamWorks && !SteamWorks_SetHTTPRequestGetOrPostParameter(hSteamWorksRequest, szParamKey, szParamValue)) {
+					bParamFailure = true;
+					break;
+				} else if (g_bSteamTools && !Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
+					Steam_ReleaseHTTPRequest(hSteamToolsRequest);
+					LogError("Failed to set WebRequest params!");
+					return false;
+				}
 			}
 			
-			return true;
+			delete smParamKeys;
+			
+			if (bParamFailure) {
+				if (!SteamTools_FallBack(this)) {
+					LogError("Failed to set WebRequest params!");
+					return false;
+				}
+				
+				return true;
+			}
 		}
 		
 		if (g_bSteamWorks) {
@@ -437,6 +442,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(0);
 			Call_Finish();
 		}
 		
@@ -455,6 +461,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(iBodySize);
 			Call_Finish();
 		}
 		
@@ -471,6 +478,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(iBodySize);
 			Call_Finish();
 		}
 		
@@ -478,9 +486,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 		return;
 	}
 	
-	char[] szBodyData = new char[iBodySize + 1];
-	
-	if (!SteamWorks_GetHTTPResponseBodyData(hSteamWorksRequest, szBodyData, iBodySize) || strlen(szBodyData) < 1) {
+	if(iBodySize + 1 > MAX_RESPONSE_BYTES) {
 		delete hSteamWorksRequest;
 		
 		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
@@ -489,6 +495,26 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(iBodySize);
+			Call_Finish();
+		}
+		
+		LogError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
+		return;
+	}
+	
+	char[] szBodyData = new char[iBodySize + 1];
+	
+	if (!SteamWorks_GetHTTPResponseBodyData(hSteamWorksRequest, szBodyData, iBodySize)) {
+		delete hSteamWorksRequest;
+		
+		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
+			Call_StartFunction(null, fCallBack);
+			Call_PushCell(wRequest);
+			Call_PushCell(false);
+			Call_PushCell(view_as<int>(httpStatusCode));
+			Call_PushString("");
+			Call_PushCell(strlen(szBodyData));
 			Call_Finish();
 		}
 		
@@ -520,6 +546,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 		Call_PushCell(true);
 		Call_PushCell(view_as<int>(httpStatusCode));
 		Call_PushString(szBodyData);
+		Call_PushCell(strlen(szBodyData));
 		Call_Finish();
 	}
 	
@@ -540,6 +567,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(0);
 			Call_Finish();
 		}
 		
@@ -558,6 +586,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(iBodySize);
 			Call_Finish();
 		}
 		
@@ -565,10 +594,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 		return;
 	}
 	
-	char[] szBodyData = new char[iBodySize + 1];
-	Steam_GetHTTPResponseBodyData(hSteamToolsRequest, szBodyData, iBodySize);
-	
-	if (strlen(szBodyData) < 1) {
+	if(iBodySize + 1 > MAX_RESPONSE_BYTES) {
 		Steam_ReleaseHTTPRequest(hSteamToolsRequest);
 		
 		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
@@ -577,12 +603,16 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 			Call_PushCell(false);
 			Call_PushCell(view_as<int>(httpStatusCode));
 			Call_PushString("");
+			Call_PushCell(iBodySize);
 			Call_Finish();
 		}
 		
-		LogError("Request failed. (Could not retrieve body data) HTTP status: %d", httpStatusCode);
+		LogError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
 		return;
 	}
+	
+	char[] szBodyData = new char[iBodySize + 1];
+	Steam_GetHTTPResponseBodyData(hSteamToolsRequest, szBodyData, iBodySize);
 	
 	char szPath[PLATFORM_MAX_PATH];
 	
@@ -608,6 +638,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 		Call_PushCell(true);
 		Call_PushCell(view_as<int>(httpStatusCode));
 		Call_PushString(szBodyData);
+		Call_PushCell(strlen(szBodyData));
 		Call_Finish();
 	}
 	
@@ -641,6 +672,8 @@ bool BuildPathRecursively(const char[] szInput)
 	
 	char szPath[PLATFORM_MAX_PATH]; 
 	
+	strcopy(szPath, sizeof(szPath), szInput);
+	
 	ReplaceString(szPath, sizeof(szPath), szFile, "", false);
 	ReplaceString(szPath, sizeof(szPath), "/", "\\", false);
 	
@@ -654,14 +687,18 @@ bool BuildPathRecursively(const char[] szInput)
 	char szTempPath[PLATFORM_MAX_PATH]; 
 	
 	for (int i = 0; i < iNumPieces; i++) {
-		Format(szTempPath, PLATFORM_MAX_PATH, "%s\\%s", szTempPath, szPieces[i]);
+		if(strlen(szPieces[i]) < 1) {
+			break;
+		}
 		
-		if (DirExists(szTempPath)) {
-			continue;
+		if(i == 0) {
+			FormatEx(szTempPath, PLATFORM_MAX_PATH, "%s", szPieces[i]);
+		} else {
+			FormatEx(szTempPath, PLATFORM_MAX_PATH, "%s\\%s", szTempPath, szPieces[i]);
 		}
 		
 		CreateDirectory(szTempPath, 511);
 	}
 	
-	return DirExists(szPath);
+	return true;
 }
