@@ -24,12 +24,20 @@ enum EHTTPMethodInternal
 	HEAD
 }
 
+enum EHTTPExtension
+{
+	STEAMTOOLS, 
+	STEAMWORKS
+}
+
+EHTTPExtension g_EHTTPExtension;
+
 typeset WebRequest_Completed {
-	function void (WebRequest wRequest, bool bSuccess, int iStatusCode, const char[] szBodyData, int iBodySize);
+	function void(WebRequest wRequest, bool bSuccess, int iStatusCode, const char[] szBodyData, int iBodySize);
 };
 
 typeset WebRequest_Downloaded {
-	function void (WebRequest wRequest, const char[] szPath, int iBytesWritten);
+	function void(WebRequest wRequest, const char[] szPath, int iBytesWritten);
 }
 
 methodmap WebRequest < Handle {
@@ -54,9 +62,108 @@ methodmap WebRequest < Handle {
 		return smWebRequest.SetString("url", szUrl, true);
 	}
 	
+	public bool GetUrl(char[] szReturn, int iSize) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		return smWebRequest.GetString("url", szReturn, iSize);
+	}
+	
 	public bool SetMethod(EHTTPMethodInternal eMethod) {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		return smWebRequest.SetValue("method", eMethod, true);
+	}
+	
+	public EHTTPMethodInternal GetMethod() {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		EHTTPMethodInternal eMethod; smWebRequest.GetValue("method", eMethod);
+		
+		return eMethod;
+	}
+	
+	public bool SetTimeOut(int iTimeOut) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		return smWebRequest.SetValue("timeout", iTimeOut, true);
+	}
+	
+	public int GetTimeOut() {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		
+		int iTimeOut = -1;
+		
+		if (!smWebRequest.GetValue("timeout", iTimeOut)) {
+			return -1;
+		}
+		
+		return iTimeOut;
+	}
+	
+	public bool SetHeader(const char[] szName, const char[] szValue) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		
+		StringMap smHeaders;
+		
+		if (!smWebRequest.GetValue("headers", smHeaders)) {
+			smHeaders = new StringMap();
+			smWebRequest.SetValue("headers", smHeaders, false);
+		}
+		
+		return smHeaders.SetString(szName, szValue, true);
+	}
+	
+	public bool GetHeader(const char[] szName, char[] szReturn, int iSize) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		
+		EHTTPExtension eHTTPExtension;
+		any aRequestHandle;
+		
+		if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
+			switch (eHTTPExtension) {
+				case STEAMWORKS: {
+					Handle hSteamWorksRequest = view_as<Handle>(aRequestHandle);
+					
+					if (hSteamWorksRequest == null) {
+						return false;
+					}
+					
+					return SteamWorks_GetHTTPResponseHeaderValue(hSteamWorksRequest, szName, szReturn, iSize);
+				}
+				
+				case STEAMTOOLS: {
+					HTTPRequestHandle hSteamToolsRequest = view_as<HTTPRequestHandle>(aRequestHandle);
+					
+					if (hSteamToolsRequest == INVALID_HTTP_HANDLE) {
+						return false;
+					}
+					
+					Steam_GetHTTPResponseHeaderValue(hSteamToolsRequest, szName, szReturn, iSize);
+					
+					return strlen(szReturn) > 0;
+				}
+			}
+		}
+		
+		StringMap smHeaders;
+		
+		if (!smWebRequest.GetValue("headers", smHeaders)) {
+			return false;
+		}
+		
+		return smHeaders.GetString(szName, szReturn, iSize);
+	}
+	
+	public bool SetReferrer(const char[] szValue) {
+		return this.SetHeader("referrer", szValue);
+	}
+	
+	public bool GetReferrer(char[] szReturn, int iSize) {
+		return this.GetHeader("referrer", szReturn, iSize);
+	}
+	
+	public bool SetUserAgent(const char[] szValue) {
+		return this.SetHeader("User-Agent", szValue);
+	}
+	
+	public bool GetUserAgent(char[] szReturn, int iSize) {
+		return this.GetHeader("User-Agent", szReturn, iSize);
 	}
 	
 	public bool SetParamString(const char[] szKey, const char[] szValue) {
@@ -71,6 +178,17 @@ methodmap WebRequest < Handle {
 		return smParams.SetString(szKey, szValue, true);
 	}
 	
+	public bool GetParamString(const char[] szKey, char[] szReturn, int iSize) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		StringMap smParams;
+		
+		if (!smWebRequest.GetValue("params", smParams)) {
+			return false;
+		}
+		
+		return smParams.GetString(szKey, szReturn, iSize);
+	}
+	
 	public bool SetParamFloat(const char[] szKey, float fValue) {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		StringMap smParams;
@@ -81,6 +199,23 @@ methodmap WebRequest < Handle {
 		}
 		
 		return smParams.SetValue(szKey, fValue, true);
+	}
+	
+	public float GetParamFloat(const char[] szKey) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		StringMap smParams;
+		
+		if (!smWebRequest.GetValue("params", smParams)) {
+			return -1.0;
+		}
+		
+		float fReturn = -1.0;
+		
+		if (!smParams.GetValue(szKey, fReturn)) {
+			return -1.0;
+		}
+		
+		return fReturn;
 	}
 	
 	public bool SetParamInt(const char[] szKey, int iValue) {
@@ -95,9 +230,31 @@ methodmap WebRequest < Handle {
 		return smParams.SetValue(szKey, iValue, true);
 	}
 	
+	public int GetParamInt(const char[] szKey) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		StringMap smParams;
+		
+		if (!smWebRequest.GetValue("params", smParams)) {
+			return false;
+		}
+		
+		int iReturn = -1;
+		
+		if (!smParams.GetValue(szKey, iReturn)) {
+			return -1;
+		}
+		
+		return iReturn;
+	}
+	
 	public bool SetPath(const char[] szPath) {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		return smWebRequest.SetString("path", szPath, true);
+	}
+	
+	public bool GetPath(char[] szReturn, int iSize) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		return smWebRequest.GetString("path", szReturn, iSize);
 	}
 	
 	public bool SetCallBack(WebRequest_Completed fCallBack) {
@@ -156,43 +313,6 @@ methodmap WebRequest < Handle {
 		return smContext.SetValue(szKey, aContextValue);
 	}
 	
-	public bool SetContextString(const char[] szKey, const char[] szValue) {
-		StringMap smWebRequest = view_as<StringMap>(this);
-		StringMap smContext; smWebRequest.GetValue("context", smContext);
-		
-		if (smContext == null) {
-			smContext = new StringMap();
-			smWebRequest.SetValue("context", smContext);
-		}
-		
-		return smContext.SetString(szKey, szValue);
-	}
-	
-	public bool SetClientContext(int iClient) {
-		return this.SetContextValue("client", GetClientSerial(iClient));
-	}
-	
-	public bool SetEntityContext(int iEntity) {
-		return this.SetContextValue("entity", EntIndexToEntRef(iEntity));
-	}
-	
-	public bool GetUrl(char[] szReturn, int iSize) {
-		StringMap smWebRequest = view_as<StringMap>(this);
-		return smWebRequest.GetString("url", szReturn, iSize);
-	}
-	
-	public bool GetPath(char[] szReturn, int iSize) {
-		StringMap smWebRequest = view_as<StringMap>(this);
-		return smWebRequest.GetString("path", szReturn, iSize);
-	}
-	
-	public EHTTPMethodInternal GetMethod() {
-		StringMap smWebRequest = view_as<StringMap>(this);
-		EHTTPMethodInternal eMethod; smWebRequest.GetValue("method", eMethod);
-		
-		return eMethod;
-	}
-	
 	public any GetContextValue(const char[] szKey) {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		StringMap smContext; smWebRequest.GetValue("context", smContext);
@@ -210,6 +330,18 @@ methodmap WebRequest < Handle {
 		return aContextValue;
 	}
 	
+	public bool SetContextString(const char[] szKey, const char[] szValue) {
+		StringMap smWebRequest = view_as<StringMap>(this);
+		StringMap smContext; smWebRequest.GetValue("context", smContext);
+		
+		if (smContext == null) {
+			smContext = new StringMap();
+			smWebRequest.SetValue("context", smContext);
+		}
+		
+		return smContext.SetString(szKey, szValue);
+	}
+	
 	public bool GetContextString(const char[] szKey, char[] szReturn, int iSize) {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		StringMap smContext; smWebRequest.GetValue("context", smContext);
@@ -221,8 +353,16 @@ methodmap WebRequest < Handle {
 		return smContext.GetString(szKey, szReturn, iSize);
 	}
 	
+	public bool SetClientContext(int iClient) {
+		return this.SetContextValue("client", GetClientSerial(iClient));
+	}
+	
 	public int GetClientContext() {
 		return GetClientFromSerial(this.GetContextValue("client"));
+	}
+	
+	public bool SetEntityContext(int iEntity) {
+		return this.SetContextValue("entity", EntIndexToEntRef(iEntity));
 	}
 	
 	public int GetEntityContext() {
@@ -266,8 +406,16 @@ methodmap WebRequest < Handle {
 		}
 		
 		StringMap smWebRequest = view_as<StringMap>(this);
+		any aRequestHandle;
+		
+		if (smWebRequest.GetValue("requesthandle", aRequestHandle)) {
+			LogError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smContext;
 		StringMap smParams;
+		StringMap smHeaders;
 		
 		char szUrl[256];
 		char szPath[PLATFORM_MAX_PATH];
@@ -287,61 +435,72 @@ methodmap WebRequest < Handle {
 			return false;
 		}
 		
-		if(!smWebRequest.GetValue("callback", iCallBack) || iCallBack == INVALID_FUNCTION) {
+		if (!smWebRequest.GetValue("callback", iCallBack) || iCallBack == INVALID_FUNCTION) {
 			smWebRequest.SetValue("callback", INVALID_FUNCTION);
 		}
 		
-		if(!smWebRequest.GetValue("downloadcallback", iDownloadCallBack) || iDownloadCallBack == INVALID_FUNCTION) {
+		if (!smWebRequest.GetValue("downloadcallback", iDownloadCallBack) || iDownloadCallBack == INVALID_FUNCTION) {
 			smWebRequest.SetValue("downloadcallback", INVALID_FUNCTION);
 		}
 		
 		smWebRequest.GetValue("context", smContext);
 		smWebRequest.GetString("path", szPath, sizeof(szPath));
 		smWebRequest.GetValue("params", smParams);
+		smWebRequest.GetValue("headers", smHeaders);
 		
 		Handle hSteamWorksRequest;
 		HTTPRequestHandle hSteamToolsRequest;
 		
-		if (g_bSteamWorks) {
-			EHTTPMethod swMethod;
-			
-			switch (eMethod) {
-				case GET: { swMethod = k_EHTTPMethodGET; }
-				case POST: { swMethod = k_EHTTPMethodPOST; }
-				case HEAD: { swMethod = k_EHTTPMethodHEAD; }
+		switch (g_EHTTPExtension) {
+			case STEAMWORKS: {
+				EHTTPMethod swMethod;
+				
+				switch (eMethod) {
+					case GET: { swMethod = k_EHTTPMethodGET; }
+					case POST: { swMethod = k_EHTTPMethodPOST; }
+					case HEAD: { swMethod = k_EHTTPMethodHEAD; }
+				}
+				
+				hSteamWorksRequest = SteamWorks_CreateHTTPRequest(swMethod, szUrl);
+				
+				if (hSteamWorksRequest == null) {
+					if (!SteamTools_FallBack(this)) {
+						LogError("Failed to create WebRequest handle!");
+						return false;
+					}
+					
+					return true;
+				}
+				
+				smWebRequest.SetValue("requestextension", STEAMWORKS, true);
+				smWebRequest.SetValue("requesthandle", hSteamWorksRequest, true);
 			}
 			
-			hSteamWorksRequest = SteamWorks_CreateHTTPRequest(swMethod, szUrl);
-			
-			if (hSteamWorksRequest == null) {
-				if(!SteamTools_FallBack(this)) {
+			case STEAMTOOLS: {
+				HTTPMethod stMethod;
+				
+				switch (eMethod) {
+					case GET: { stMethod = HTTPMethod_GET; }
+					case POST: { stMethod = HTTPMethod_POST; }
+					case HEAD: { stMethod = HTTPMethod_HEAD; }
+				}
+				
+				hSteamToolsRequest = Steam_CreateHTTPRequest(stMethod, szUrl);
+				
+				if (hSteamToolsRequest == INVALID_HTTP_HANDLE) {
 					LogError("Failed to create WebRequest handle!");
 					return false;
 				}
 				
-				return true;
-			}
-		} else if (g_bSteamTools) {
-			HTTPMethod stMethod;
-			
-			switch (eMethod) {
-				case GET: { stMethod = HTTPMethod_GET; }
-				case POST: { stMethod = HTTPMethod_POST; }
-				case HEAD: { stMethod = HTTPMethod_HEAD; }
-			}
-			
-			hSteamToolsRequest = Steam_CreateHTTPRequest(stMethod, szUrl);
-			
-			if (hSteamToolsRequest == INVALID_HTTP_HANDLE) {
-				LogError("Failed to create WebRequest handle!");
-				return false;
+				smWebRequest.SetValue("requestextension", STEAMTOOLS, true);
+				smWebRequest.SetValue("requesthandle", hSteamToolsRequest, true);
 			}
 		}
 		
-		char szParamKey[64];
-		char szParamValue[64];
-		
-		if(smParams != null) {
+		if (smParams != null) {
+			char szParamKey[64];
+			char szParamValue[64];
+			
 			StringMapSnapshot smParamKeys = smParams.Snapshot();
 			
 			bool bParamFailure = false;
@@ -350,20 +509,33 @@ methodmap WebRequest < Handle {
 				smParamKeys.GetKey(i, szParamKey, sizeof(szParamKey));
 				smParams.GetString(szParamKey, szParamValue, sizeof(szParamValue));
 				
-				if (g_bSteamWorks && !SteamWorks_SetHTTPRequestGetOrPostParameter(hSteamWorksRequest, szParamKey, szParamValue)) {
-					bParamFailure = true;
-					break;
-				} else if (g_bSteamTools && !Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
-					Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-					LogError("Failed to set WebRequest params!");
-					return false;
+				switch (g_EHTTPExtension) {
+					case STEAMWORKS: {
+						if (!SteamWorks_SetHTTPRequestGetOrPostParameter(hSteamWorksRequest, szParamKey, szParamValue)) {
+							bParamFailure = true;
+							break;
+						}
+					}
+					
+					case STEAMTOOLS: {
+						if (!Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
+							Steam_ReleaseHTTPRequest(hSteamToolsRequest);
+							smWebRequest.Remove("requesthandle");
+							LogError("Failed to set WebRequest params!");
+							return false;
+						}
+					}
 				}
 			}
 			
 			delete smParamKeys;
 			
 			if (bParamFailure) {
+				delete hSteamWorksRequest;
+				smWebRequest.Remove("requesthandle");
+				
 				if (!SteamTools_FallBack(this)) {
+					smWebRequest.Remove("requesthandle");
 					LogError("Failed to set WebRequest params!");
 					return false;
 				}
@@ -372,43 +544,98 @@ methodmap WebRequest < Handle {
 			}
 		}
 		
-		if (g_bSteamWorks) {
-			if (!SteamWorks_SetHTTPRequestContextValue(hSteamWorksRequest, smWebRequest)) {
+		if (smHeaders != null) {
+			char szHeaderName[256];
+			char szHeaderValue[256];
+			
+			StringMapSnapshot smHeaderKeys = smHeaders.Snapshot();
+			
+			bool bHeaderFailure = false;
+			
+			for (int i = 0; i < smHeaderKeys.Length; i++) {
+				smHeaderKeys.GetKey(i, szHeaderName, sizeof(szHeaderName));
+				smHeaders.GetString(szHeaderName, szHeaderValue, sizeof(szHeaderValue));
+				
+				switch (g_EHTTPExtension) {
+					case STEAMWORKS: {
+						if (!SteamWorks_SetHTTPRequestHeaderValue(hSteamWorksRequest, szHeaderName, szHeaderValue)) {
+							bHeaderFailure = true;
+							break;
+						}
+					}
+					
+					case STEAMTOOLS: {
+						Steam_SetHTTPRequestHeaderValue(hSteamToolsRequest, szHeaderName, szHeaderValue);
+					}
+				}
+			}
+			
+			delete smHeaderKeys;
+			
+			if (bHeaderFailure) {
 				delete hSteamWorksRequest;
+				smWebRequest.Remove("requesthandle");
 				
 				if (!SteamTools_FallBack(this)) {
-					LogError("Failed to set WebRequest context!");
+					smWebRequest.Remove("requesthandle");
+					LogError("Failed to set WebRequest headers!");
 					return false;
 				}
 				
 				return true;
 			}
-			
-			if (!SteamWorks_SetHTTPCallbacks(hSteamWorksRequest, WebRequest_SteamWorksComplete)) {
-				delete hSteamWorksRequest;
-				
-				if (!SteamTools_FallBack(this)) {
-					LogError("Failed to set WebRequest callback!");
-					return false;
+		}
+		
+		switch (g_EHTTPExtension) {
+			case STEAMWORKS: {
+				if (!SteamWorks_SetHTTPRequestContextValue(hSteamWorksRequest, smWebRequest)) {
+					delete hSteamWorksRequest;
+					smWebRequest.Remove("requesthandle");
+					
+					if (!SteamTools_FallBack(this)) {
+						smWebRequest.Remove("requesthandle");
+						LogError("Failed to set WebRequest context!");
+						return false;
+					}
+					
+					return true;
 				}
 				
-				return true;
+				if (!SteamWorks_SetHTTPCallbacks(hSteamWorksRequest, WebRequest_SteamWorksComplete)) {
+					delete hSteamWorksRequest;
+					smWebRequest.Remove("requesthandle");
+					
+					if (!SteamTools_FallBack(this)) {
+						smWebRequest.Remove("requesthandle");
+						LogError("Failed to set WebRequest callback!");
+						return false;
+					}
+					
+					return true;
+				}
+				
+				if (!SteamWorks_SendHTTPRequest(hSteamWorksRequest)) {
+					delete hSteamWorksRequest;
+					smWebRequest.Remove("requesthandle");
+					
+					if (!SteamTools_FallBack(this)) {
+						smWebRequest.Remove("requesthandle");
+						LogError("Failed to send WebRequest!");
+						return false;
+					}
+					
+					return true;
+				}
 			}
 			
-			if (!SteamWorks_SendHTTPRequest(hSteamWorksRequest)) {
-				delete hSteamWorksRequest;
-				
-				if (!SteamTools_FallBack(this)) {
+			case STEAMTOOLS: {
+				if (!Steam_SendHTTPRequest(hSteamToolsRequest, WebRequest_SteamToolsComplete, this)) {
+					Steam_ReleaseHTTPRequest(hSteamToolsRequest);
+					smWebRequest.Remove("requesthandle");
 					LogError("Failed to send WebRequest!");
 					return false;
 				}
-				
-				return true;
 			}
-		} else if (g_bSteamTools && !Steam_SendHTTPRequest(hSteamToolsRequest, WebRequest_SteamToolsComplete, this)) {
-			Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-			LogError("Failed to send WebRequest!");
-			return false;
 		}
 		
 		return true;
@@ -421,9 +648,9 @@ bool SteamTools_FallBack(WebRequest wRequest)
 		return false;
 	}
 	
-	g_bSteamWorks = false;
+	g_EHTTPExtension = STEAMTOOLS;
 	bool bResult = wRequest.Send();
-	g_bSteamWorks = true;
+	g_EHTTPExtension = STEAMWORKS;
 	
 	return bResult;
 }
@@ -486,7 +713,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 		return;
 	}
 	
-	if(iBodySize + 1 > MAX_RESPONSE_BYTES) {
+	if (iBodySize + 1 > MAX_RESPONSE_BYTES) {
 		delete hSteamWorksRequest;
 		
 		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
@@ -528,7 +755,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 		File fFile = OpenFile(szPath, "w+");
 		
 		if (fFile != null) {
-			if(fFile.WriteString(szBodyData, false) && fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION)) {
+			if (fFile.WriteString(szBodyData, false) && fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION)) {
 				Call_StartFunction(null, fDownloadCallBack);
 				Call_PushCell(wRequest);
 				Call_PushString(szPath);
@@ -594,7 +821,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 		return;
 	}
 	
-	if(iBodySize + 1 > MAX_RESPONSE_BYTES) {
+	if (iBodySize + 1 > MAX_RESPONSE_BYTES) {
 		Steam_ReleaseHTTPRequest(hSteamToolsRequest);
 		
 		if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
@@ -620,7 +847,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 		File fFile = OpenFile(szPath, "w+");
 		
 		if (fFile != null) {
-			if(fFile.WriteString(szBodyData, false) && fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION)) {
+			if (fFile.WriteString(szBodyData, false) && fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION)) {
 				Call_StartFunction(null, fDownloadCallBack);
 				Call_PushCell(wRequest);
 				Call_PushString(szPath);
@@ -650,6 +877,10 @@ void WebRequest_CheckExtensions()
 	g_bExtensions = true;
 	g_bSteamTools = (GetExtensionFileStatus("steamtools.ext") == 1);
 	g_bSteamWorks = (GetExtensionFileStatus("SteamWorks.ext") == 1);
+	
+	if (g_bSteamWorks) {
+		g_EHTTPExtension = STEAMWORKS;
+	}
 }
 
 bool BuildPathRecursively(const char[] szInput)
