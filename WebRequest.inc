@@ -341,27 +341,29 @@ methodmap WebRequest < Handle {
 			return false;
 		}
 		
-		//Hack.
-		int iCallBack = view_as<int>(fCallBack);
+		Handle hFwd;
 		
-		return smWebRequest.SetValue("callback", iCallBack);
+		if (smWebRequest.GetValue("callback", hFwd) && hFwd != null) {
+			return false;
+		}
+		
+		return smWebRequest.SetValue("callback", CreateCompletedForwardHandle(fCallBack), false);
 	}
 	
-	public WebRequest_Completed GetCallBack() {
+	public Handle GetCallBack() {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
-			return view_as<WebRequest_Completed>(INVALID_FUNCTION);
+			return null;
 		}
 		
-		//Hack.
-		int iCallBack;
+		Handle hFwd;
 		
-		if (!smWebRequest.GetValue("callback", iCallBack)) {
-			return view_as<WebRequest_Completed>(INVALID_FUNCTION);
+		if (!smWebRequest.GetValue("callback", hFwd) || hFwd == null) {
+			return null;
 		}
 		
-		return view_as<WebRequest_Completed>(iCallBack);
+		return hFwd;
 	}
 	
 	public bool SetDownloadCallBack(WebRequest_Downloaded fCallBack) {
@@ -371,27 +373,29 @@ methodmap WebRequest < Handle {
 			return false;
 		}
 		
-		//Hack.
-		int iCallBack = view_as<int>(fCallBack);
+		Handle hFwd;
 		
-		return smWebRequest.SetValue("downloadcallback", iCallBack);
+		if (smWebRequest.GetValue("downloadcallback", hFwd) && hFwd != null) {
+			return false;
+		}
+		
+		return smWebRequest.SetValue("downloadcallback", CreateDownloadedForwardHandle(fCallBack), false);
 	}
 	
-	public WebRequest_Downloaded GetDownloadCallBack() {
+	public Handle GetDownloadCallBack() {
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
-			return view_as<WebRequest_Downloaded>(INVALID_FUNCTION);
+			return null;
 		}
 		
-		//Hack.
-		int iCallBack;
+		Handle hFwd;
 		
-		if (!smWebRequest.GetValue("downloadcallback", iCallBack)) {
-			return view_as<WebRequest_Downloaded>(INVALID_FUNCTION);
+		if (!smWebRequest.GetValue("downloadcallback", hFwd) || hFwd == null) {
+			return null;
 		}
 		
-		return view_as<WebRequest_Downloaded>(iCallBack);
+		return hFwd;
 	}
 	
 	public bool SetContextValue(const char[] szKey, any aContextValue) {
@@ -832,18 +836,18 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	
 	smWebRequest.SetValue("timedout", false);
 	
-	WebRequest_Completed fCallBack = wRequest.GetCallBack();
-	bool bCompletedCallBack = fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION);
+	Handle hCompletedFwd = wRequest.GetCallBack();
+	bool bCompletedCallBack = hCompletedFwd != null;
 	
-	WebRequest_Downloaded fDownloadCallBack = wRequest.GetDownloadCallBack();
-	bool bDownloadedCallBack = fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION);
+	Handle hDownloadCallBack = wRequest.GetDownloadCallBack();
+	bool bDownloadedCallBack = hDownloadCallBack != null;
 	
 	char szPath[PLATFORM_MAX_PATH];
 	bool bPathSet = wRequest.GetPath(szPath, sizeof(szPath));
 	
 	if (!bSuccessful || bFailure) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -862,7 +866,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	
 	if (!SteamWorks_GetHTTPResponseBodySize(hSteamWorksRequest, iBodySize)) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -879,7 +883,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	
 	if (iBodySize < 1) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -896,7 +900,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	
 	if (iBodySize + 1 > MAX_RESPONSE_BYTES) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -915,7 +919,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	
 	if (!SteamWorks_GetHTTPResponseBodyData(hSteamWorksRequest, szBodyData, iBodySize)) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -935,7 +939,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 		
 		if (fFile != null) {
 			if (fFile.WriteString(szBodyData, false) && bDownloadedCallBack) {
-				Call_StartFunction(null, fDownloadCallBack);
+				Call_StartForward(hDownloadCallBack);
 				Call_PushCell(wRequest);
 				Call_PushString(szPath);
 				Call_PushCell(FileSize(szPath));
@@ -947,7 +951,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	}
 	
 	if (bCompletedCallBack) {
-		Call_StartFunction(null, fCallBack);
+		Call_StartForward(hCompletedFwd);
 		Call_PushCell(wRequest);
 		Call_PushCell(true);
 		Call_PushCell(false);
@@ -995,18 +999,18 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	
 	smWebRequest.SetValue("timedout", false);
 	
-	WebRequest_Completed fCallBack = wRequest.GetCallBack();
-	bool bCompletedCallBack = fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION);
+	Handle hCompletedFwd = wRequest.GetCallBack();
+	bool bCompletedCallBack = hCompletedFwd != null;
 	
-	WebRequest_Downloaded fDownloadCallBack = wRequest.GetDownloadCallBack();
-	bool bDownloadedCallBack = fDownloadCallBack != view_as<WebRequest_Downloaded>(INVALID_FUNCTION);
+	Handle hDownloadCallBack = wRequest.GetDownloadCallBack();
+	bool bDownloadedCallBack = hDownloadCallBack != null;
 	
 	char szPath[PLATFORM_MAX_PATH];
 	bool bPathSet = wRequest.GetPath(szPath, sizeof(szPath));
 	
 	if (!bSuccessful) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -1025,7 +1029,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	
 	if (iBodySize < 1) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -1042,7 +1046,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	
 	if (iBodySize + 1 > MAX_RESPONSE_BYTES) {
 		if (bCompletedCallBack) {
-			Call_StartFunction(null, fCallBack);
+			Call_StartForward(hCompletedFwd);
 			Call_PushCell(wRequest);
 			Call_PushCell(false);
 			Call_PushCell(false);
@@ -1065,7 +1069,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 		
 		if (fFile != null) {
 			if (fFile.WriteString(szBodyData, false) && bDownloadedCallBack) {
-				Call_StartFunction(null, fDownloadCallBack);
+				Call_StartForward(hDownloadCallBack);
 				Call_PushCell(wRequest);
 				Call_PushString(szPath);
 				Call_PushCell(FileSize(szPath));
@@ -1077,7 +1081,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	}
 	
 	if (bCompletedCallBack) {
-		Call_StartFunction(null, fCallBack);
+		Call_StartForward(hCompletedFwd);
 		Call_PushCell(wRequest);
 		Call_PushCell(true);
 		Call_PushCell(false);
@@ -1109,10 +1113,10 @@ public Action Timer_HttpRequestTimeOut(Handle hTimer, WebRequest wRequest)
 	
 	smWebRequest.SetValue("timedout", true);
 	
-	WebRequest_Completed fCallBack = wRequest.GetCallBack();
+	Handle hCompletedFwd = wRequest.GetCallBack();
 	
-	if (fCallBack != view_as<WebRequest_Completed>(INVALID_FUNCTION)) {
-		Call_StartFunction(null, fCallBack);
+	if (hCompletedFwd != null) {
+		Call_StartForward(hCompletedFwd);
 		Call_PushCell(wRequest);
 		Call_PushCell(false);
 		Call_PushCell(true);
@@ -1204,4 +1208,22 @@ bool BuildPathRecursively(const char[] szInput)
 	}
 	
 	return true;
+}
+
+
+// Thanks Sikari for the idea!
+public Handle CreateCompletedForwardHandle(Function fCallBack)
+{
+	Handle hFwd = CreateForward(ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_String, Param_Cell);
+	AddToForward(hFwd, null, fCallBack);
+	
+	return hFwd;
+}
+
+public Handle CreateDownloadedForwardHandle(Function fCallBack)
+{
+	Handle hFwd = CreateForward(ET_Ignore, Param_Cell, Param_String, Param_Cell);
+	AddToForward(hFwd, null, fCallBack);
+	
+	return hFwd;
 }
