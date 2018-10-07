@@ -518,12 +518,7 @@ methodmap WebRequest < Handle {
 					}
 					
 					case STEAMTOOLS: {
-						if (!Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue)) {
-							Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-							smWebRequest.Remove("requesthandle");
-							LogError("Failed to set WebRequest params!");
-							return false;
-						}
+						Steam_SetHTTPRequestGetOrPostParameter(hSteamToolsRequest, szParamKey, szParamValue);
 					}
 				}
 			}
@@ -629,12 +624,7 @@ methodmap WebRequest < Handle {
 			}
 			
 			case STEAMTOOLS: {
-				if (!Steam_SendHTTPRequest(hSteamToolsRequest, WebRequest_SteamToolsComplete, this)) {
-					Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-					smWebRequest.Remove("requesthandle");
-					LogError("Failed to send WebRequest!");
-					return false;
-				}
+				Steam_SendHTTPRequest(hSteamToolsRequest, WebRequest_SteamToolsComplete, this);
 			}
 		}
 		
