@@ -1109,7 +1109,7 @@ public Action Timer_HttpRequestTimeOut(Handle hTimer, WebRequest wRequest)
 		Call_PushCell(wRequest);
 		Call_PushCell(false);
 		Call_PushCell(true);
-		Call_PushCell(-1);
+		Call_PushCell(408);
 		Call_PushString("");
 		Call_PushCell(0);
 		Call_Finish();
