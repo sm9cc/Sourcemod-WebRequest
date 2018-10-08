@@ -50,14 +50,36 @@ methodmap WebRequest < Handle {
 		
 		if (!g_bSteamWorks && !g_bSteamTools) {
 			delete smWebRequest;
-			LogError("SteamWorks or SteamTools is required to make a WebRequest!");
+			ThrowError("SteamWorks or SteamTools is required to make a WebRequest!");
 			return null;
 		}
 		
 		return view_as<WebRequest>(smWebRequest);
 	}
 	
+	public bool IsSent() {
+		StringMap smWebRequest = new StringMap();
+		
+		if (smWebRequest == null) {
+			return false;
+		}
+		
+		EHTTPExtension eHTTPExtension;
+		any aRequestHandle;
+		
+		if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
+			return true;
+		}
+		
+		return false;
+	}
+	
 	public bool SetUrl(const char[] szUrl) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -78,6 +100,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetMethod(EHTTPMethodInternal eMethod) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -100,6 +127,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetTimeOut(int iTimeOut) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -126,6 +158,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetHeader(const char[] szName, const char[] szValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -149,35 +186,6 @@ methodmap WebRequest < Handle {
 			return false;
 		}
 		
-		EHTTPExtension eHTTPExtension;
-		any aRequestHandle;
-		
-		if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
-			switch (eHTTPExtension) {
-				case STEAMWORKS: {
-					Handle hSteamWorksRequest = view_as<Handle>(aRequestHandle);
-					
-					if (hSteamWorksRequest == null) {
-						return false;
-					}
-					
-					return SteamWorks_GetHTTPResponseHeaderValue(hSteamWorksRequest, szName, szReturn, iSize);
-				}
-				
-				case STEAMTOOLS: {
-					HTTPRequestHandle hSteamToolsRequest = view_as<HTTPRequestHandle>(aRequestHandle);
-					
-					if (hSteamToolsRequest == INVALID_HTTP_HANDLE) {
-						return false;
-					}
-					
-					Steam_GetHTTPResponseHeaderValue(hSteamToolsRequest, szName, szReturn, iSize);
-					
-					return strlen(szReturn) > 0;
-				}
-			}
-		}
-		
 		StringMap smHeaders;
 		
 		if (!smWebRequest.GetValue("headers", smHeaders)) {
@@ -188,6 +196,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetReferrer(const char[] szValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		return this.SetHeader("referrer", szValue);
 	}
 	
@@ -196,6 +209,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetUserAgent(const char[] szValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		return this.SetHeader("User-Agent", szValue);
 	}
 	
@@ -204,6 +222,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetParamString(const char[] szKey, const char[] szValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -237,6 +260,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetParamFloat(const char[] szKey, float fValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -276,6 +304,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetParamInt(const char[] szKey, int iValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -315,6 +348,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetPath(const char[] szPath) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -335,6 +373,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetCallBack(WebRequest_Completed fCallBack) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -367,6 +410,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetDownloadCallBack(WebRequest_Downloaded fCallBack) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -399,6 +447,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetContextValue(const char[] szKey, any aContextValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -438,6 +491,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetContextString(const char[] szKey, const char[] szValue) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
@@ -471,6 +529,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetClientContext(int iClient) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		return this.SetContextValue("client", GetClientSerial(iClient));
 	}
 	
@@ -479,6 +542,11 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool SetEntityContext(int iEntity) {
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
+			return false;
+		}
+		
 		return this.SetContextValue("entity", EntIndexToEntRef(iEntity));
 	}
 	
@@ -486,83 +554,13 @@ methodmap WebRequest < Handle {
 		return EntRefToEntIndex(this.GetContextValue("entity"));
 	}
 	
-	public void Clear() {
-		StringMap smWebRequest = view_as<StringMap>(this);
-		
-		if (smWebRequest == null) {
-			return;
-		}
-		
-		StringMap smParams; smWebRequest.GetValue("params", smParams);
-		StringMap smHeaders; smWebRequest.GetValue("headers", smHeaders);
-		StringMap smContext; smWebRequest.GetValue("context", smContext);
-		
-		if (smParams != null) {
-			smParams.Clear();
-		}
-		
-		if (smHeaders != null) {
-			smHeaders.Clear();
-		}
-		
-		if (smContext != null) {
-			smContext.Clear();
-		}
-	}
-	
-	public void Dispose() {
-		StringMap smWebRequest = view_as<StringMap>(this);
-		
-		if (smWebRequest == null) {
-			return;
-		}
-		
-		EHTTPExtension eHTTPExtension;
-		any aRequestHandle;
-		
-		if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
-			switch (eHTTPExtension) {
-				case STEAMWORKS: {
-					Handle hSteamWorksRequest = view_as<Handle>(aRequestHandle);
-					delete hSteamWorksRequest;
-				}
-				
-				case STEAMTOOLS: {
-					HTTPRequestHandle hSteamToolsRequest = view_as<HTTPRequestHandle>(aRequestHandle);
-					
-					if (hSteamToolsRequest != INVALID_HTTP_HANDLE) {
-						smWebRequest.Remove("requesthandle");
-						Steam_ReleaseHTTPRequest(hSteamToolsRequest);
-						hSteamToolsRequest = INVALID_HTTP_HANDLE;
-					}
-				}
-			}
-		}
-		
-		StringMap smParams; smWebRequest.GetValue("params", smParams);
-		StringMap smHeaders; smWebRequest.GetValue("headers", smHeaders);
-		StringMap smContext; smWebRequest.GetValue("context", smContext);
-		
-		delete smParams;
-		delete smHeaders;
-		delete smContext;
-		delete this;
-	}
-	
 	public bool Send() {
-		if (!g_bSteamWorks && !g_bSteamTools) {
-			this.Dispose();
-			LogError("SteamWorks or SteamTools is required to make a WebRequest!");
+		if (this.IsSent()) {
+			ThrowError("You have already sent this request!");
 			return false;
 		}
 		
 		StringMap smWebRequest = view_as<StringMap>(this);
-		any aRequestHandle;
-		
-		if (smWebRequest.GetValue("requesthandle", aRequestHandle)) {
-			LogError("You have already sent this request!");
-			return false;
-		}
 		
 		StringMap smContext;
 		StringMap smParams;
@@ -580,12 +578,12 @@ methodmap WebRequest < Handle {
 		bool bTimeOut = smWebRequest.GetValue("timeout", iTimeOut);
 		
 		if (!smWebRequest.GetString("url", szUrl, sizeof(szUrl))) {
-			LogError("You must set a WebRequest url before sending!");
+			ThrowError("You must set a WebRequest url before sending!");
 			return false;
 		}
 		
 		if (!smWebRequest.GetValue("method", eMethod)) {
-			LogError("You must set a WebRequest method before sending!");
+			ThrowError("You must set a WebRequest method before sending!");
 			return false;
 		}
 		
@@ -619,7 +617,7 @@ methodmap WebRequest < Handle {
 				
 				if (hSteamWorksRequest == null) {
 					if (!SteamTools_FallBack(this)) {
-						LogError("Failed to create WebRequest handle!");
+						ThrowError("Failed to create WebRequest handle!");
 						return false;
 					}
 					
@@ -642,8 +640,8 @@ methodmap WebRequest < Handle {
 				hSteamToolsRequest = Steam_CreateHTTPRequest(stMethod, szUrl);
 				
 				if (hSteamToolsRequest == INVALID_HTTP_HANDLE) {
-					this.Dispose();
-					LogError("Failed to create WebRequest handle!");
+					CleanUpInternal(this);
+					ThrowError("Failed to create WebRequest handle!");
 					return false;
 				}
 				
@@ -686,7 +684,7 @@ methodmap WebRequest < Handle {
 				smWebRequest.Remove("requesthandle");
 				
 				if (!SteamTools_FallBack(this)) {
-					LogError("Failed to set WebRequest params!");
+					ThrowError("Failed to set WebRequest params!");
 					return false;
 				}
 				
@@ -700,40 +698,34 @@ methodmap WebRequest < Handle {
 			
 			StringMapSnapshot smHeaderKeys = smHeaders.Snapshot();
 			
-			bool bHeaderFailure = false;
-			
 			for (int i = 0; i < smHeaderKeys.Length; i++) {
 				smHeaderKeys.GetKey(i, szHeaderName, sizeof(szHeaderName));
 				smHeaders.GetString(szHeaderName, szHeaderValue, sizeof(szHeaderValue));
 				
 				switch (g_EHTTPExtension) {
 					case STEAMWORKS: {
-						if (!SteamWorks_SetHTTPRequestHeaderValue(hSteamWorksRequest, szHeaderName, szHeaderValue)) {
-							bHeaderFailure = true;
-							break;
+						// According to Asherkin and KyleS setting the User-Agent probably won't work unless steamclient is manually updated.
+						// And if it still does not work afterwards, then its a Valve bug ¯\_(ツ)_/¯
+						// Assume it worked if .GetHeader returns true in the request callback.
+						
+						if ((StrEqual(szHeaderName, "User-Agent", false) && !SteamWorks_SetHTTPRequestUserAgentInfo(hSteamWorksRequest, szHeaderValue)) || !SteamWorks_SetHTTPRequestHeaderValue(hSteamWorksRequest, szHeaderName, szHeaderValue)) {
+							smHeaders.Remove(szHeaderName); // Just so we can make the assumption it did not work when calling .GetHeader in the request callback.
+							continue; // Lets not break the entire request if we can't set a fucking header.
 						}
 					}
 					
 					case STEAMTOOLS: {
+						if(StrEqual(szHeaderName, "User-Agent", false)) { 
+							smHeaders.Remove(szHeaderName); // Removing this so .GetHeader in the callback does not wrongly give the impression it that it worked.
+							continue; // Blah, unsupported! If this fails, it is going to throw an error and break the entire fucking request, Make the switch to SteamWorks!
+						}
+						
 						Steam_SetHTTPRequestHeaderValue(hSteamToolsRequest, szHeaderName, szHeaderValue);
 					}
 				}
 			}
 			
 			delete smHeaderKeys;
-			
-			if (bHeaderFailure) {
-				delete hSteamWorksRequest;
-				smWebRequest.Remove("requestextension");
-				smWebRequest.Remove("requesthandle");
-				
-				if (!SteamTools_FallBack(this)) {
-					LogError("Failed to set WebRequest headers!");
-					return false;
-				}
-				
-				return true;
-			}
 		}
 		
 		switch (g_EHTTPExtension) {
@@ -744,7 +736,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requesthandle");
 					
 					if (!SteamTools_FallBack(this)) {
-						LogError("Failed to set WebRequest context!");
+						ThrowError("Failed to set WebRequest context!");
 						return false;
 					}
 					
@@ -757,7 +749,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requesthandle");
 					
 					if (!SteamTools_FallBack(this)) {
-						LogError("Failed to set WebRequest callback!");
+						ThrowError("Failed to set WebRequest callback!");
 						return false;
 					}
 					
@@ -770,7 +762,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requesthandle");
 					
 					if (!SteamTools_FallBack(this)) {
-						LogError("Failed to set WebRequest timeout!");
+						ThrowError("Failed to set WebRequest timeout!");
 						return false;
 					}
 					
@@ -783,7 +775,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requesthandle");
 					
 					if (!SteamTools_FallBack(this)) {
-						LogError("Failed to send WebRequest!");
+						ThrowError("Failed to send WebRequest!");
 						return false;
 					}
 					
@@ -816,7 +808,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	}
 	
 	if (hSteamWorksRequest == null) {
-		wRequest.Dispose();
+		CleanUpInternal(wRequest);
 		return;
 	}
 	
@@ -830,7 +822,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 	bool bTimedOut;
 	
 	if (smWebRequest.GetValue("timedout", bTimedOut) && bTimedOut) {
-		wRequest.Dispose();
+		CleanUpInternal(wRequest);
 		return;
 	}
 	
@@ -857,8 +849,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("Request failed. (Unknown) HTTP status: %d", httpStatusCode);
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Unknown) HTTP status: %d", httpStatusCode);
 		return;
 	}
 	
@@ -876,8 +868,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("Request failed. (Unable to retrieve body size) HTTP status: %d", httpStatusCode);
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Unable to retrieve body size) HTTP status: %d", httpStatusCode);
 		return;
 	}
 	
@@ -893,8 +885,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("Request failed. (Body Empty) HTTP status: %d", httpStatusCode);
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Body Empty) HTTP status: %d", httpStatusCode);
 		return;
 	}
 	
@@ -910,8 +902,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
+		CleanUpInternal(wRequest);
+		ThrowError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
 		return;
 	}
 	
@@ -929,8 +921,8 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("Request failed. (Could not retrieve body data) HTTP status: %d", httpStatusCode);
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Could not retrieve body data) HTTP status: %d", httpStatusCode);
 		return;
 	}
 	
@@ -961,7 +953,7 @@ public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailur
 		Call_Finish();
 	}
 	
-	wRequest.Dispose();
+	CleanUpInternal(wRequest);
 }
 
 public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, bool bSuccessful, HTTPStatusCode httpStatusCode, WebRequest wRequest)
@@ -976,10 +968,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	}
 	
 	if (hSteamToolsRequest == INVALID_HTTP_HANDLE) {
-		if (wRequest != null) {
-			wRequest.Dispose();
-		}
-		
+		CleanUpInternal(wRequest);
 		return;
 	}
 	
@@ -993,7 +982,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 	bool bTimedOut;
 	
 	if (smWebRequest.GetValue("timedout", bTimedOut) && bTimedOut) {
-		wRequest.Dispose();
+		CleanUpInternal(wRequest);
 		return;
 	}
 	
@@ -1020,8 +1009,8 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("Request failed. (Unknown) HTTP status: %d", httpStatusCode);
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Unknown) HTTP status: %d", httpStatusCode);
 		return;
 	}
 	
@@ -1039,8 +1028,8 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("Request failed. (Body Empty) HTTP status: %d", httpStatusCode);
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Body Empty) HTTP status: %d", httpStatusCode);
 		return;
 	}
 	
@@ -1056,8 +1045,8 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 			Call_Finish();
 		}
 		
-		wRequest.Dispose();
-		LogError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
+		CleanUpInternal(wRequest);
+		ThrowError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
 		return;
 	}
 	
@@ -1091,7 +1080,7 @@ public int WebRequest_SteamToolsComplete(HTTPRequestHandle hSteamToolsRequest, b
 		Call_Finish();
 	}
 	
-	wRequest.Dispose();
+	CleanUpInternal(wRequest);
 }
 
 public Action Timer_HttpRequestTimeOut(Handle hTimer, WebRequest wRequest)
@@ -1142,7 +1131,7 @@ bool SteamTools_FallBack(WebRequest wRequest)
 	g_EHTTPExtension = STEAMWORKS;
 	
 	if (!bResult) {
-		wRequest.Dispose();
+		CleanUpInternal(wRequest);
 	}
 	
 	return bResult;
@@ -1157,6 +1146,50 @@ void WebRequest_CheckExtensions()
 	if (g_bSteamWorks) {
 		g_EHTTPExtension = STEAMWORKS;
 	}
+}
+
+void CleanUpInternal(WebRequest wRequest)
+{
+	if(wRequest == null) {
+		return;
+	}
+	
+	StringMap smWebRequest = view_as<StringMap>(wRequest);
+	
+	if (smWebRequest == null) {
+		return;
+	}
+	
+	EHTTPExtension eHTTPExtension;
+	any aRequestHandle;
+	
+	if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
+		switch (eHTTPExtension) {
+			case STEAMWORKS: {
+				Handle hSteamWorksRequest = view_as<Handle>(aRequestHandle);
+				delete hSteamWorksRequest;
+			}
+			
+			case STEAMTOOLS: {
+				HTTPRequestHandle hSteamToolsRequest = view_as<HTTPRequestHandle>(aRequestHandle);
+				
+				if (hSteamToolsRequest != INVALID_HTTP_HANDLE) {
+					smWebRequest.Remove("requesthandle");
+					Steam_ReleaseHTTPRequest(hSteamToolsRequest);
+					hSteamToolsRequest = INVALID_HTTP_HANDLE;
+				}
+			}
+		}
+	}
+	
+	StringMap smParams; smWebRequest.GetValue("params", smParams);
+	StringMap smHeaders; smWebRequest.GetValue("headers", smHeaders);
+	StringMap smContext; smWebRequest.GetValue("context", smContext);
+	
+	delete smParams;
+	delete smHeaders;
+	delete smContext;
+	delete wRequest;
 }
 
 bool BuildPathRecursively(const char[] szInput)
@@ -1209,7 +1242,6 @@ bool BuildPathRecursively(const char[] szInput)
 	
 	return true;
 }
-
 
 // Thanks Sikari for the idea!
 public Handle CreateCompletedForwardHandle(Function fCallBack)
