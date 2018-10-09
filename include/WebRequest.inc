@@ -7,6 +7,7 @@
 #undef REQUIRE_EXTENSIONS
 #endif
 
+#include <system2>
 #include <steamtools>
 #include <SteamWorks>
 
@@ -14,6 +15,7 @@
 #pragma dynamic MAX_RESPONSE_BYTES
 
 bool g_bExtensions = false;
+bool g_bSystem2 = false;
 bool g_bSteamTools = false;
 bool g_bSteamWorks = false;
 
@@ -26,6 +28,7 @@ enum EHTTPMethodInternal
 
 enum EHTTPExtension
 {
+	SYSTEM2, 
 	STEAMTOOLS, 
 	STEAMWORKS
 }
@@ -265,20 +268,13 @@ methodmap WebRequest < Handle {
 			return false;
 		}
 		
-		StringMap smWebRequest = view_as<StringMap>(this);
+		char szValue[10];
 		
-		if (smWebRequest == null) {
+		if (FloatToString(fValue, szValue, sizeof(szValue)) < 1) {
 			return false;
 		}
 		
-		StringMap smParams;
-		
-		if (!smWebRequest.GetValue("params", smParams)) {
-			smParams = new StringMap();
-			smWebRequest.SetValue("params", smParams, false);
-		}
-		
-		return smParams.SetValue(szKey, fValue, true);
+		return this.SetParamString(szKey, szValue);
 	}
 	
 	public float GetParamFloat(const char[] szKey) {
@@ -309,20 +305,13 @@ methodmap WebRequest < Handle {
 			return false;
 		}
 		
-		StringMap smWebRequest = view_as<StringMap>(this);
+		char szValue[10];
 		
-		if (smWebRequest == null) {
+		if (IntToString(iValue, szValue, sizeof(szValue)) < 1) {
 			return false;
 		}
 		
-		StringMap smParams;
-		
-		if (!smWebRequest.GetValue("params", smParams)) {
-			smParams = new StringMap();
-			smWebRequest.SetValue("params", smParams, false);
-		}
-		
-		return smParams.SetValue(szKey, iValue, true);
+		return this.SetParamString(szKey, szValue);
 	}
 	
 	public int GetParamInt(const char[] szKey) {
@@ -567,6 +556,7 @@ methodmap WebRequest < Handle {
 		StringMap smHeaders;
 		
 		char szUrl[256];
+		char szSystem2Url[1024];
 		char szPath[PLATFORM_MAX_PATH];
 		
 		EHTTPMethodInternal eMethod;
@@ -600,10 +590,15 @@ methodmap WebRequest < Handle {
 		smWebRequest.GetValue("params", smParams);
 		smWebRequest.GetValue("headers", smHeaders);
 		
+		System2HTTPRequest hSystem2Request;
 		Handle hSteamWorksRequest;
 		HTTPRequestHandle hSteamToolsRequest;
 		
 		switch (g_EHTTPExtension) {
+			case SYSTEM2: {
+				FormatEx(szSystem2Url, sizeof(szSystem2Url), "%s?", szUrl);
+			}
+			
 			case STEAMWORKS: {
 				EHTTPMethod swMethod;
 				
@@ -616,7 +611,7 @@ methodmap WebRequest < Handle {
 				hSteamWorksRequest = SteamWorks_CreateHTTPRequest(swMethod, szUrl);
 				
 				if (hSteamWorksRequest == null) {
-					if (!SteamTools_FallBack(this)) {
+					if (!Method_FallBack(this, STEAMTOOLS, true)) {
 						ThrowError("Failed to create WebRequest handle!");
 						return false;
 					}
@@ -663,6 +658,14 @@ methodmap WebRequest < Handle {
 				smParams.GetString(szParamKey, szParamValue, sizeof(szParamValue));
 				
 				switch (g_EHTTPExtension) {
+					case SYSTEM2: {
+						if (i > 0) {
+							StrCat(szSystem2Url, sizeof(szSystem2Url), "&");
+						}
+						
+						Format(szSystem2Url, sizeof(szSystem2Url), "%s%s=%s", szSystem2Url, szParamKey, szParamValue);
+					}
+					
 					case STEAMWORKS: {
 						if (!SteamWorks_SetHTTPRequestGetOrPostParameter(hSteamWorksRequest, szParamKey, szParamValue)) {
 							bParamFailure = true;
@@ -683,13 +686,29 @@ methodmap WebRequest < Handle {
 				smWebRequest.Remove("requestextension");
 				smWebRequest.Remove("requesthandle");
 				
-				if (!SteamTools_FallBack(this)) {
+				if (!Method_FallBack(this, STEAMTOOLS, true)) {
 					ThrowError("Failed to set WebRequest params!");
 					return false;
 				}
 				
 				return true;
 			}
+		}
+		
+		if (g_EHTTPExtension == SYSTEM2) {
+			hSystem2Request = new System2HTTPRequest(WebRequest_System2Complete, szSystem2Url);
+			
+			if (hSystem2Request == null) {
+				if (!Method_FallBack(this, STEAMWORKS, true)) {
+					ThrowError("Failed to create WebRequest handle!");
+					return false;
+				}
+				
+				return true;
+			}
+			
+			smWebRequest.SetValue("requestextension", SYSTEM2, true);
+			smWebRequest.SetValue("requesthandle", hSystem2Request, true);
 		}
 		
 		if (smHeaders != null) {
@@ -702,12 +721,22 @@ methodmap WebRequest < Handle {
 				smHeaderKeys.GetKey(i, szHeaderName, sizeof(szHeaderName));
 				smHeaders.GetString(szHeaderName, szHeaderValue, sizeof(szHeaderValue));
 				
+				// According to Asherkin and KyleS setting the User-Agent probably won't work unless steamclient is manually updated.
+				// And if it still does not work afterwards, then its a Valve bug ¯\_(ツ)_/¯
+				// Assume it worked if .GetHeader returns true in the request callback.
+				// Seems to work with the System2 extension though!
+				
 				switch (g_EHTTPExtension) {
-					case STEAMWORKS: {
-						// According to Asherkin and KyleS setting the User-Agent probably won't work unless steamclient is manually updated.
-						// And if it still does not work afterwards, then its a Valve bug ¯\_(ツ)_/¯
-						// Assume it worked if .GetHeader returns true in the request callback.
+					case SYSTEM2: {
+						if (StrEqual(szHeaderName, "User-Agent", false)) {
+							hSystem2Request.SetUserAgent(szHeaderValue);
+							continue;
+						}
 						
+						hSystem2Request.SetHeader(szHeaderName, szHeaderValue);
+					}
+					
+					case STEAMWORKS: {
 						if ((StrEqual(szHeaderName, "User-Agent", false) && !SteamWorks_SetHTTPRequestUserAgentInfo(hSteamWorksRequest, szHeaderValue)) || !SteamWorks_SetHTTPRequestHeaderValue(hSteamWorksRequest, szHeaderName, szHeaderValue)) {
 							smHeaders.Remove(szHeaderName); // Just so we can make the assumption it did not work when calling .GetHeader in the request callback.
 							continue; // Lets not break the entire request if we can't set a fucking header.
@@ -715,7 +744,7 @@ methodmap WebRequest < Handle {
 					}
 					
 					case STEAMTOOLS: {
-						if(StrEqual(szHeaderName, "User-Agent", false)) { 
+						if (StrEqual(szHeaderName, "User-Agent", false)) {
 							smHeaders.Remove(szHeaderName); // Removing this so .GetHeader in the callback does not wrongly give the impression it that it worked.
 							continue; // Blah, unsupported! If this fails, it is going to throw an error and break the entire fucking request, Make the switch to SteamWorks!
 						}
@@ -729,13 +758,27 @@ methodmap WebRequest < Handle {
 		}
 		
 		switch (g_EHTTPExtension) {
+			case SYSTEM2: {
+				hSystem2Request.Any = this;
+				
+				if (bTimeOut) {
+					hSystem2Request.Timeout = iTimeOut;
+				}
+				
+				switch (eMethod) {
+					case GET: { hSystem2Request.GET(); }
+					case POST: { hSystem2Request.POST(); }
+					case HEAD: { hSystem2Request.HEAD(); }
+				}
+			}
+			
 			case STEAMWORKS: {
-				if (!SteamWorks_SetHTTPRequestContextValue(hSteamWorksRequest, smWebRequest)) {
+				if (!SteamWorks_SetHTTPRequestContextValue(hSteamWorksRequest, this)) {
 					delete hSteamWorksRequest;
 					smWebRequest.Remove("requestextension");
 					smWebRequest.Remove("requesthandle");
 					
-					if (!SteamTools_FallBack(this)) {
+					if (!Method_FallBack(this, STEAMTOOLS, true)) {
 						ThrowError("Failed to set WebRequest context!");
 						return false;
 					}
@@ -748,7 +791,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requestextension");
 					smWebRequest.Remove("requesthandle");
 					
-					if (!SteamTools_FallBack(this)) {
+					if (!Method_FallBack(this, STEAMTOOLS, true)) {
 						ThrowError("Failed to set WebRequest callback!");
 						return false;
 					}
@@ -761,7 +804,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requestextension");
 					smWebRequest.Remove("requesthandle");
 					
-					if (!SteamTools_FallBack(this)) {
+					if (!Method_FallBack(this, STEAMTOOLS, true)) {
 						ThrowError("Failed to set WebRequest timeout!");
 						return false;
 					}
@@ -774,7 +817,7 @@ methodmap WebRequest < Handle {
 					smWebRequest.Remove("requestextension");
 					smWebRequest.Remove("requesthandle");
 					
-					if (!SteamTools_FallBack(this)) {
+					if (!Method_FallBack(this, STEAMTOOLS, true)) {
 						ThrowError("Failed to send WebRequest!");
 						return false;
 					}
@@ -799,6 +842,149 @@ methodmap WebRequest < Handle {
 		return true;
 	}
 };
+
+public void WebRequest_System2Complete(bool bSuccessful, const char[] szError, System2HTTPRequest s2Request, System2HTTPResponse s2Response, HTTPRequestMethod s2Method)
+{
+	WebRequest wRequest = s2Request.Any;
+	
+	if (wRequest == null) {
+		delete s2Request;
+		return;
+	}
+	
+	if (s2Request == null) {
+		CleanUpInternal(wRequest);
+		return;
+	}
+	
+	StringMap smWebRequest = view_as<StringMap>(wRequest);
+	Handle hTimeOutTimer;
+	
+	if (smWebRequest.GetValue("timer", hTimeOutTimer) && hTimeOutTimer != null) {
+		delete hTimeOutTimer;
+	}
+	
+	bool bTimedOut;
+	
+	if (smWebRequest.GetValue("timedout", bTimedOut) && bTimedOut) {
+		CleanUpInternal(wRequest);
+		return;
+	}
+	
+	smWebRequest.SetValue("timedout", false);
+	
+	Handle hCompletedFwd = wRequest.GetCallBack();
+	bool bCompletedCallBack = hCompletedFwd != null;
+	
+	Handle hDownloadCallBack = wRequest.GetDownloadCallBack();
+	bool bDownloadedCallBack = hDownloadCallBack != null;
+	
+	char szPath[PLATFORM_MAX_PATH];
+	bool bPathSet = wRequest.GetPath(szPath, sizeof(szPath));
+	
+	int iStatusCode = view_as<int>(s2Response.StatusCode);
+	
+	if (!bSuccessful) {
+		if (bCompletedCallBack) {
+			Call_StartForward(hCompletedFwd);
+			Call_PushCell(wRequest);
+			Call_PushCell(false);
+			Call_PushCell(false);
+			Call_PushCell(iStatusCode);
+			Call_PushString("");
+			Call_PushCell(0);
+			Call_Finish();
+		}
+		
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Unknown) HTTP status: %d", iStatusCode);
+		return;
+	}
+	
+	int iBodySize = s2Response.ContentLength;
+	
+	if (iBodySize < 1) {
+		if (bCompletedCallBack) {
+			Call_StartForward(hCompletedFwd);
+			Call_PushCell(wRequest);
+			Call_PushCell(false);
+			Call_PushCell(false);
+			Call_PushCell(iStatusCode);
+			Call_PushString("");
+			Call_PushCell(iBodySize);
+			Call_Finish();
+		}
+		
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Body Empty) HTTP status: %d", iStatusCode);
+		return;
+	}
+	
+	if (iBodySize + 1 > MAX_RESPONSE_BYTES) {
+		if (bCompletedCallBack) {
+			Call_StartForward(hCompletedFwd);
+			Call_PushCell(wRequest);
+			Call_PushCell(false);
+			Call_PushCell(false);
+			Call_PushCell(iStatusCode);
+			Call_PushString("");
+			Call_PushCell(iBodySize);
+			Call_Finish();
+		}
+		
+		CleanUpInternal(wRequest);
+		ThrowError("MAX_RESPONSE_BYTES needs to be increased to %d or more.", iBodySize + 1);
+		return;
+	}
+	
+	char[] szBodyData = new char[iBodySize + 1];
+	
+	if (s2Response.GetContent(szBodyData, iBodySize + 1) < 1) {
+		if (bCompletedCallBack) {
+			Call_StartForward(hCompletedFwd);
+			Call_PushCell(wRequest);
+			Call_PushCell(false);
+			Call_PushCell(false);
+			Call_PushCell(iStatusCode);
+			Call_PushString("");
+			Call_PushCell(strlen(szBodyData));
+			Call_Finish();
+		}
+		
+		CleanUpInternal(wRequest);
+		ThrowError("Request failed. (Could not retrieve body data) HTTP status: %d", iStatusCode);
+		return;
+	}
+	
+	if (bPathSet && BuildPathRecursively(szPath)) {
+		File fFile = OpenFile(szPath, "w+");
+		
+		if (fFile != null) {
+			if (fFile.WriteString(szBodyData, false) && bDownloadedCallBack) {
+				Call_StartForward(hDownloadCallBack);
+				Call_PushCell(wRequest);
+				Call_PushString(szPath);
+				Call_PushCell(FileSize(szPath));
+				Call_Finish();
+			}
+			
+			fFile.Close();
+		}
+	}
+	
+	if (bCompletedCallBack) {
+		Call_StartForward(hCompletedFwd);
+		Call_PushCell(wRequest);
+		Call_PushCell(true);
+		Call_PushCell(false);
+		Call_PushCell(iStatusCode);
+		Call_PushString(szBodyData);
+		Call_PushCell(strlen(szBodyData));
+		Call_Finish();
+	}
+	
+	CleanUpInternal(wRequest);
+}
 
 public int WebRequest_SteamWorksComplete(Handle hSteamWorksRequest, bool bFailure, bool bSuccessful, EHTTPStatusCode httpStatusCode, WebRequest wRequest)
 {
@@ -1120,37 +1306,70 @@ public Action Timer_HttpRequestTimeOut(Handle hTimer, WebRequest wRequest)
 	return Plugin_Stop;
 }
 
-bool SteamTools_FallBack(WebRequest wRequest)
+bool Method_FallBack(WebRequest wRequest, EHTTPExtension eHTTPExtension, bool bCleanUpOnFail)
 {
-	if (!g_bSteamTools) {
+	if (g_EHTTPExtension == eHTTPExtension) {
 		return false;
 	}
 	
-	g_EHTTPExtension = STEAMTOOLS;
-	bool bResult = wRequest.Send();
-	g_EHTTPExtension = STEAMWORKS;
+	WebRequest_CheckExtensions();
 	
-	if (!bResult) {
+	switch (eHTTPExtension) {
+		case SYSTEM2: {
+			if (!g_bSystem2) {
+				return false;
+			}
+		}
+		
+		case STEAMWORKS: {
+			if (!g_bSteamWorks) {
+				return false;
+			}
+		}
+		
+		case STEAMTOOLS: {
+			if (!g_bSteamTools) {
+				return false;
+			}
+		}
+	}
+	
+	EHTTPExtension ePrevHTTPExtension = g_EHTTPExtension;
+	g_EHTTPExtension = eHTTPExtension;
+	
+	bool bResult = wRequest.Send();
+	
+	if (!bResult && bCleanUpOnFail) {
 		CleanUpInternal(wRequest);
 	}
+	
+	g_EHTTPExtension = ePrevHTTPExtension;
 	
 	return bResult;
 }
 
 void WebRequest_CheckExtensions()
 {
-	g_bExtensions = true;
-	g_bSteamTools = (GetExtensionFileStatus("steamtools.ext") == 1);
+	g_bSystem2 = (GetExtensionFileStatus("system2.ext") == 1);
 	g_bSteamWorks = (GetExtensionFileStatus("SteamWorks.ext") == 1);
+	g_bSteamTools = (GetExtensionFileStatus("steamtools.ext") == 1);
 	
-	if (g_bSteamWorks) {
-		g_EHTTPExtension = STEAMWORKS;
+	if (!g_bExtensions) {
+		if (g_bSystem2) {
+			g_EHTTPExtension = SYSTEM2;
+		} else if (g_bSteamWorks) {
+			g_EHTTPExtension = STEAMWORKS;
+		} else if (g_bSteamTools) {
+			g_EHTTPExtension = STEAMTOOLS;
+		}
 	}
+	
+	g_bExtensions = true;
 }
 
 void CleanUpInternal(WebRequest wRequest)
 {
-	if(wRequest == null) {
+	if (wRequest == null) {
 		return;
 	}
 	
@@ -1165,6 +1384,11 @@ void CleanUpInternal(WebRequest wRequest)
 	
 	if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
 		switch (eHTTPExtension) {
+			case SYSTEM2: {
+				System2HTTPRequest hSystem2Request = view_as<System2HTTPRequest>(aRequestHandle);
+				delete hSystem2Request;
+			}
+			
 			case STEAMWORKS: {
 				Handle hSteamWorksRequest = view_as<Handle>(aRequestHandle);
 				delete hSteamWorksRequest;
