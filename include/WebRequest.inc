@@ -49,8 +49,8 @@ methodmap WebRequest < Handle {
 			WebRequest_CheckExtensions();
 		}
 		
-		if (!g_bSteamWorks && !g_bSteamTools) {
-			ThrowError("SteamWorks or SteamTools is required to make a WebRequest!");
+		if (!g_bSystem2 && !g_bSteamWorks && !g_bSteamTools) {
+			ThrowError("System2, SteamWorks or SteamTools is required to make a WebRequest!");
 			return null;
 		}
 		
