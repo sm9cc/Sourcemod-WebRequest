@@ -61,7 +61,7 @@ methodmap WebRequest < Handle {
 	}
 	
 	public bool IsSent() {
-		StringMap smWebRequest = new StringMap();
+		StringMap smWebRequest = view_as<StringMap>(this);
 		
 		if (smWebRequest == null) {
 			return false;
@@ -70,11 +70,7 @@ methodmap WebRequest < Handle {
 		EHTTPExtension eHTTPExtension;
 		any aRequestHandle;
 		
-		if (smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle)) {
-			return true;
-		}
-		
-		return false;
+		return smWebRequest.GetValue("requestextension", eHTTPExtension) && smWebRequest.GetValue("requesthandle", aRequestHandle);
 	}
 	
 	public bool SetUrl(const char[] szUrl) {
