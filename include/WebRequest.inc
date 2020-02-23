@@ -45,19 +45,16 @@ typeset WebRequest_Downloaded {
 
 methodmap WebRequest < Handle {
 	public WebRequest() {
-		StringMap smWebRequest = new StringMap();
-		
 		if (!g_bExtensions) {
 			WebRequest_CheckExtensions();
 		}
 		
 		if (!g_bSteamWorks && !g_bSteamTools) {
-			delete smWebRequest;
 			ThrowError("SteamWorks or SteamTools is required to make a WebRequest!");
 			return null;
 		}
 		
-		return view_as<WebRequest>(smWebRequest);
+		return view_as<WebRequest>(new StringMap());
 	}
 	
 	public bool IsSent() {
